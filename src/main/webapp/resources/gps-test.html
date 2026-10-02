@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
+    <title>GPS 테스트</title>
+    <style>
+        body { margin: 0; padding: 16px; font: 17px/1.5 -apple-system, BlinkMacSystemFont, "Malgun Gothic", sans-serif; color: #111; background: #fff; word-break: keep-all; }
+        h1 { margin: 0; font-size: 1.3rem; }
+        section { margin-top: 16px; padding-top: 12px; border-top: 1px solid #ccc; }
+        .warn { margin: 4px 0 0; color: #b45309; }
+        .bad { color: #c00; font-weight: 700; }
+        .big { font-size: 2.4rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+        .num { font-variant-numeric: tabular-nums; }
+        .buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        button { min-height: 56px; font-size: 1.05rem; font-weight: 700; border: 1px solid #999; border-radius: 8px; background: #f3f3f3; }
+        button.primary { background: #1f5bd6; border-color: #1f5bd6; color: #fff; }
+        button:disabled { opacity: .4; }
+        label { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0; }
+        input { width: 7em; min-height: 40px; font-size: 1rem; padding: 0 8px; }
+        input[type="text"] { width: 100%; }
+        ul { margin: 4px 0; padding-left: 20px; }
+        dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; }
+        dt { color: #555; }
+        dd { margin: 0; }
+    </style>
+</head>
+<body>
+<h1>GPS 테스트 (확인 후 삭제할 페이지)</h1>
+<p class="warn">측정 중에는 화면을 켜 두세요. (화면 끄기 · 앱 전환 측정 때만 일부러 끕니다) 위치는 이 휴대폰에만 저장되고 서버로 보내지 않습니다.</p>
+
+<section>
+    <dl>
+        <dt>위치 권한</dt><dd id="permStatus">확인 전</dd>
+        <dt>화면 꺼짐 방지</dt><dd id="wakeStatus">꺼짐</dd>
+        <dt>중간 저장</dt><dd id="storageStatus">-</dd>
+        <dt>마지막 점</dt><dd id="lastPoint">-</dd>
+        <dt>상태</dt><dd id="runStatus">시작 전</dd>
+    </dl>
+</section>
+
+<section>
+    <div>보정 거리</div>
+    <div class="big"><span id="fixedDistance">0.000</span> km</div>
+    <div>원본 거리 <strong class="num" id="rawDistance">0.000</strong> km</div>
+    <div>시간 <strong class="num" id="elapsed">00:00:00</strong> (일시정지 제외)</div>
+</section>
+
+<section>
+    <div class="num">받은 점 <strong id="countRaw">0</strong> · 통과 <strong id="countKept">0</strong></div>
+    <div class="num">버린 점: 정확도 <span id="countAccuracy">0</span> · 짧은 이동 <span id="countMinStep">0</span> · 속도 <span id="countSpeed">0</span></div>
+</section>
+
+<section class="buttons">
+    <button class="primary" type="button" id="btnStart">시작</button>
+    <button type="button" id="btnPause" disabled>일시정지</button>
+    <button type="button" id="btnStop" disabled>종료</button>
+</section>
+
+<section>
+    <div>끊김 목록 (점 사이가 10초 넘게 빈 구간)</div>
+    <ul id="gapList"><li>없음</li></ul>
+</section>
+
+<section>
+    <div>기준값 (바꾸면 바로 적용)</div>
+    <label>최대 정확도 (m) <input type="number" id="cfgMaxAccuracy" min="1" step="1" inputmode="numeric"></label>
+    <label>최소 이동 (m) <input type="number" id="cfgMinStep" min="0" step="1" inputmode="numeric"></label>
+    <label>최대 속도 (m/s) <input type="number" id="cfgMaxSpeed" min="1" step="0.5" inputmode="decimal"></label>
+</section>
+
+<section>
+    <label>측정 이름 <input type="text" id="measureName" maxlength="40" placeholder="예: 트랙 3바퀴 - 아이폰"></label>
+    <div class="buttons">
+        <button type="button" id="btnDownload">로그 내려받기</button>
+        <button type="button" id="btnReset">기록 초기화</button>
+    </div>
+</section>
+
+<script>
+var App = window.App || {};
+
+// GPS 실측용 버리는 페이지. 기능 ① 의 점 거르기 · 거리 계산 기준값을 정하는 데 쓰고, 결정 후 삭제한다.
+App.gpsTest = (function(){
+    var m$ = {
+            permStatus: document.getElementById('permStatus'),
+            wakeStatus: document.getElementById('wakeStatus'),
+            storageStatus: document.getElementById('storageStatus'),
+            lastPoint: document.getElementById('lastPoint'),
+            runStatus: document.getElementById('runStatus'),
+            fixedDistance: document.getElementById('fixedDistance'),
+            rawDistance: document.getElementById('rawDistance'),
+            elapsed: document.getElementById('elapsed'),
+            countRaw: document.getElementById('countRaw'),
+            countKept: document.getElementById('countKept'),
+            countAccuracy: document.getElementById('countAccuracy'),
+            countMinStep: document.getElementById('countMinStep'),
+            countSpeed: document.getElementById('countSpeed'),
+            gapList: document.getElementById('gapList'),
+            btnStart: document.getElementById('btnStart'),
+            btnPause: document.getElementById('btnPause'),
+            btnStop: document.getElementById('btnStop'),
+            btnDownload: document.getElementById('btnDownload'),
+            btnReset: document.getElementById('btnReset'),
+            cfgMaxAccuracy: document.getElementById('cfgMaxAccuracy'),
+            cfgMinStep: document.getElementById('cfgMinStep'),
+            cfgMaxSpeed: document.getElementById('cfgMaxSpeed'),
+            measureName: document.getElementById('measureName')
+        },
+        STORAGE_KEY = 'gpsTest',
+        R = 6371008.8,          // 지구 평균 반지름(m). 서버(Java) 계산과 같은 값을 쓴다
+        GAP_MS = 10000,         // 점 사이가 이보다 길면 끊김으로 기록
+        STATUS_NAME = {idle: '시작 전', running: '측정 중', paused: '일시정지', finished: '종료'},
+        DEFAULT_CFG = {maxAccuracy: 30, minStep: 5, maxSpeed: 8},
+
+        // 화면에 보이는 값은 모두 data 에서 다시 계산할 수 있게 저장한다 (새로고침 복원)
+        data = null,
+        runtime = {watchId: null, wakeLock: null, runStartedAt: null, timer: null},
+
+        newData = function(){
+            return {
+                version: 1,
+                name: '',
+                status: 'idle',
+                cfg: Object.assign({}, DEFAULT_CFG),
+                cfgLog: [],             // [{t, cfg}] 측정 중 기준값을 바꾼 기록
+                segments: [],           // 구간(일시정지마다 새로) 별 원본 점 [[{lat, lng, acc, t, reason}], …]
+                gaps: [],               // [{at, sec, vis: [state…]}]
+                visLog: [],             // [{t, state}] 화면 보임/숨김 변화
+                elapsedMs: 0,           // 일시정지를 뺀 측정 시간 (지난 구간까지)
+                startedAt: null,
+                userAgent: navigator.userAgent
+            };
+        },
+
+        init = function(){
+            data = load() || newData();
+            if(data.status === 'running') data.status = 'paused'; // 새로고침되면 위치 받기가 끊기므로 일시정지로 복원
+            fillCfgInputs();
+            m$.measureName.value = data.name;
+            bindEvent();
+            checkPermission();
+            render();
+            runtime.timer = setInterval(renderClock, 1000);
+        },
+
+        bindEvent = function(){
+            m$.btnStart.addEventListener('click', start);
+            m$.btnPause.addEventListener('click', pause);
+            m$.btnStop.addEventListener('click', stop);
+            m$.btnDownload.addEventListener('click', download);
+            m$.btnReset.addEventListener('click', reset);
+            [m$.cfgMaxAccuracy, m$.cfgMinStep, m$.cfgMaxSpeed].forEach(function(input){
+                input.addEventListener('change', changeCfg);
+            });
+            m$.measureName.addEventListener('input', function(){
+                data.name = m$.measureName.value.trim();
+                save();
+            });
+            document.addEventListener('visibilitychange', function(){
+                data.visLog.push({t: Date.now(), state: document.visibilityState});
+                save();
+                if(document.visibilityState === 'visible' && data.status === 'running') requestWakeLock();
+            });
+        },
+
+        /* === 측정 흐름: 시작(또는 다시 시작) → 일시정지 → 종료 === */
+
+        start = function(){
+            if(!navigator.geolocation){
+                m$.permStatus.innerHTML = '<span class="bad">이 브라우저는 위치 기능이 없어요</span>';
+                return;
+            }
+            if(data.status === 'finished') return;
+            if(!data.startedAt) data.startedAt = Date.now();
+            data.segments.push([]);
+            data.status = 'running';
+            runtime.runStartedAt = Date.now();
+            runtime.watchId = navigator.geolocation.watchPosition(onPosition, onPositionError,
+                {enableHighAccuracy: true, maximumAge: 0, timeout: 15000});
+            requestWakeLock();
+            save();
+            render();
+        },
+
+        pause = function(){
+            if(data.status !== 'running') return;
+            stopWatching();
+            data.status = 'paused';
+            save();
+            render();
+        },
+
+        stop = function(){
+            if(data.status !== 'running' && data.status !== 'paused') return;
+            if(!confirm('측정을 끝낼까요? 끝낸 뒤에는 로그를 내려받으세요.')) return;
+            stopWatching();
+            data.status = 'finished';
+            save();
+            render();
+        },
+
+        stopWatching = function(){
+            if(runtime.watchId !== null) navigator.geolocation.clearWatch(runtime.watchId);
+            runtime.watchId = null;
+            if(runtime.runStartedAt){
+                data.elapsedMs += Date.now() - runtime.runStartedAt;
+                runtime.runStartedAt = null;
+            }
+            releaseWakeLock();
+        },
+
+        onPosition = function(pos){
+            if(data.status !== 'running') return;
+            var segment = data.segments[data.segments.length - 1],
+                prev = segment[segment.length - 1],
+                p = {
+                    lat: round6(pos.coords.latitude),
+                    lng: round6(pos.coords.longitude),
+                    acc: Math.round(pos.coords.accuracy),
+                    t: pos.timestamp,
+                    reason: null
+                };
+
+            if(prev && p.t - prev.t > GAP_MS) recordGap(prev.t, p.t);
+            p.reason = judge(p, lastKept(segment), data.cfg);
+            segment.push(p);
+            m$.permStatus.textContent = '허용됨';
+            save();
+            render();
+        },
+
+        onPositionError = function(err){
+            var reason = {1: '거부됨 (브라우저 설정에서 위치를 허용해 주세요)', 2: '위치를 찾을 수 없어요', 3: '응답 시간 초과 (계속 시도 중)'}[err.code] || err.message;
+            m$.permStatus.innerHTML = '<span class="bad">' + reason + '</span>';
+        },
+
+        recordGap = function(fromT, toT){
+            var vis = data.visLog.filter(function(v){ return v.t >= fromT && v.t <= toT; })
+                .map(function(v){ return v.state; });
+            data.gaps.push({at: fromT, sec: Math.round((toT - fromT) / 1000), vis: vis});
+        },
+
+        /* === 계산 (기능 ① 의 JS · Java 에 옮길 로직) === */
+
+        // 두 점 사이 거리(m). a, b: {lat, lng}
+        haversine = function(a, b){
+            var rad = function(d){ return d * Math.PI / 180; },
+                dLat = rad(b.lat - a.lat),
+                dLng = rad(b.lng - a.lng),
+                h = Math.pow(Math.sin(dLat / 2), 2)
+                    + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.pow(Math.sin(dLng / 2), 2);
+            return 2 * R * Math.asin(Math.sqrt(h));
+        },
+
+        // 점 거르기. 버리면 이유('accuracy' | 'minStep' | 'speed'), 통과하면 null. last 는 마지막으로 통과한 점
+        judge = function(p, last, cfg){
+            if(p.acc > cfg.maxAccuracy) return 'accuracy';
+            if(!last) return null;
+            var d = haversine(last, p);
+            if(d < cfg.minStep) return 'minStep';
+            var sec = (p.t - last.t) / 1000;
+            if(sec > 0 && d / sec > cfg.maxSpeed) return 'speed';
+            return null;
+        },
+
+        lastKept = function(segment){
+            for(var i = segment.length - 1; i >= 0; i--){
+                if(segment[i].reason === null) return segment[i];
+            }
+            return null;
+        },
+
+        // 구간 안의 점끼리만 거리를 더한다 (일시정지 사이 이동은 세지 않음)
+        sumDistance = function(onlyKept){
+            return data.segments.reduce(function(total, segment){
+                var points = onlyKept ? segment.filter(function(p){ return p.reason === null; }) : segment;
+                for(var i = 1; i < points.length; i++) total += haversine(points[i - 1], points[i]);
+                return total;
+            }, 0);
+        },
+
+        /* === 화면 === */
+
+        render = function(){
+            var counts = {total: 0, kept: 0, accuracy: 0, minStep: 0, speed: 0},
+                all = [];
+            data.segments.forEach(function(segment){ all = all.concat(segment); });
+            all.forEach(function(p){
+                counts.total++;
+                if(p.reason === null) counts.kept++;
+                else counts[p.reason]++;
+            });
+
+            m$.fixedDistance.textContent = (sumDistance(true) / 1000).toFixed(3);
+            m$.rawDistance.textContent = (sumDistance(false) / 1000).toFixed(3);
+            m$.countRaw.textContent = counts.total;
+            m$.countKept.textContent = counts.kept;
+            m$.countAccuracy.textContent = counts.accuracy;
+            m$.countMinStep.textContent = counts.minStep;
+            m$.countSpeed.textContent = counts.speed;
+            m$.runStatus.textContent = STATUS_NAME[data.status] + (data.segments.length > 1 ? ' (구간 ' + data.segments.length + ')' : '');
+
+            m$.btnStart.textContent = data.status === 'paused' ? '다시 시작' : '시작';
+            m$.btnStart.disabled = data.status === 'running' || data.status === 'finished';
+            m$.btnPause.disabled = data.status !== 'running';
+            m$.btnStop.disabled = data.status !== 'running' && data.status !== 'paused';
+            [m$.cfgMaxAccuracy, m$.cfgMinStep, m$.cfgMaxSpeed].forEach(function(input){
+                input.disabled = data.status === 'finished';
+            });
+
+            renderGaps();
+            renderClock();
+        },
+
+        renderGaps = function(){
+            m$.gapList.replaceChildren();
+            if(!data.gaps.length){
+                m$.gapList.appendChild(item('없음'));
+                return;
+            }
+            data.gaps.forEach(function(g){
+                var vis = g.vis.length ? g.vis.map(function(s){ return s === 'hidden' ? '숨김' : '보임'; }).join(' → ') : '화면 변화 없음';
+                m$.gapList.appendChild(item(clock(g.at) + '  ' + g.sec + '초  ' + vis));
+            });
+        },
+
+        renderClock = function(){
+            var ms = data.elapsedMs + (runtime.runStartedAt ? Date.now() - runtime.runStartedAt : 0),
+                last = null;
+            m$.elapsed.textContent = duration(ms);
+            data.segments.forEach(function(segment){ if(segment.length) last = segment[segment.length - 1]; });
+            m$.lastPoint.textContent = last
+                ? '정확도 ' + last.acc + 'm · ' + Math.max(0, Math.round((Date.now() - last.t) / 1000)) + '초 전'
+                : '-';
+        },
+
+        /* === 화면 꺼짐 방지 === */
+
+        requestWakeLock = function(){
+            if(!('wakeLock' in navigator)){
+                m$.wakeStatus.textContent = '지원 안 함';
+                return;
+            }
+            navigator.wakeLock.request('screen').then(function(lock){
+                runtime.wakeLock = lock;
+                m$.wakeStatus.textContent = '켜짐';
+                lock.addEventListener('release', function(){ m$.wakeStatus.textContent = '풀림'; });
+            }).catch(function(e){
+                m$.wakeStatus.innerHTML = '<span class="bad">실패 (' + e.name + ')</span>';
+            });
+        },
+
+        releaseWakeLock = function(){
+            if(runtime.wakeLock) runtime.wakeLock.release();
+            runtime.wakeLock = null;
+        },
+
+        /* === 기준값 === */
+
+        fillCfgInputs = function(){
+            m$.cfgMaxAccuracy.value = data.cfg.maxAccuracy;
+            m$.cfgMinStep.value = data.cfg.minStep;
+            m$.cfgMaxSpeed.value = data.cfg.maxSpeed;
+        },
+
+        // 바꾼 값은 이후 받는 점부터 적용된다. 이미 받은 점의 판정은 바꾸지 않는다
+        changeCfg = function(){
+            var next = {
+                maxAccuracy: Number(m$.cfgMaxAccuracy.value),
+                minStep: Number(m$.cfgMinStep.value),
+                maxSpeed: Number(m$.cfgMaxSpeed.value)
+            };
+            if(!(next.maxAccuracy > 0) || !(next.minStep >= 0) || !(next.maxSpeed > 0)){
+                alert('기준값은 0보다 큰 숫자로 입력해 주세요. (최소 이동은 0 이상)');
+                fillCfgInputs();
+                return;
+            }
+            data.cfg = next;
+            data.cfgLog.push({t: Date.now(), cfg: next});
+            save();
+        },
+
+        /* === 저장 · 내려받기 === */
+
+        load = function(){
+            try {
+                var raw = localStorage.getItem(STORAGE_KEY);
+                return raw ? JSON.parse(raw) : null;
+            } catch(e){
+                return null;
+            }
+        },
+
+        // 용량 부족 등으로 실패하면 화면에 알린다 (측정은 계속되지만 새로고침하면 그 뒤 기록이 사라진다)
+        save = function(){
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                m$.storageStatus.textContent = '정상';
+            } catch(e){
+                m$.storageStatus.innerHTML = '<span class="bad">저장 실패 (' + e.name + ') — 새로고침하지 말고 종료 후 로그를 내려받으세요</span>';
+            }
+        },
+
+        download = function(){
+            var blob = new Blob([JSON.stringify(data, null, 1)], {type: 'application/json'}),
+                a = document.createElement('a'),
+                name = (data.name || '이름없음').replace(/[\\/:*?"<>|\s]+/g, '_');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'gps-test-' + name + '-' + stamp(new Date()) + '.json';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+        },
+
+        reset = function(){
+            if(data.status === 'running'){
+                alert('측정 중에는 초기화할 수 없어요. 먼저 종료해 주세요.');
+                return;
+            }
+            if(!confirm('기록을 모두 지울까요? 로그를 내려받지 않았다면 되돌릴 수 없어요.')) return;
+            var cfg = data.cfg;
+            data = newData();
+            data.cfg = cfg;           // 조정한 기준값은 다음 측정에도 유지
+            m$.measureName.value = '';
+            m$.wakeStatus.textContent = '꺼짐';
+            save();
+            render();
+        },
+
+        checkPermission = function(){
+            if(!navigator.permissions || !navigator.permissions.query) return;
+            navigator.permissions.query({name: 'geolocation'}).then(function(result){
+                var name = {granted: '허용됨', denied: '거부됨', prompt: '확인 전 (시작하면 물어봄)'};
+                m$.permStatus.textContent = name[result.state] || result.state;
+            }).catch(function(){});
+        },
+
+        /* === 작은 도우미 === */
+
+        item = function(text){
+            var li = document.createElement('li');
+            li.textContent = text;
+            return li;
+        },
+
+        round6 = function(n){ return Math.round(n * 1e6) / 1e6; },
+
+        pad = function(n){ return String(n).padStart(2, '0'); },
+
+        clock = function(t){
+            var d = new Date(t);
+            return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+        },
+
+        duration = function(ms){
+            var s = Math.floor(ms / 1000);
+            return pad(Math.floor(s / 3600)) + ':' + pad(Math.floor(s % 3600 / 60)) + ':' + pad(s % 60);
+        },
+
+        stamp = function(d){
+            return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes());
+        };
+
+    return { init: init, haversine: haversine, judge: judge };
+}());
+
+document.addEventListener('DOMContentLoaded', function(){
+    App.gpsTest.init();
+});
+</script>
+</body>
+</html>
