@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:mvc="http://www.springframework.org/schema/mvc"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans https://www.springframework.org/schema/beans/spring-beans.xsd
+                           http://www.springframework.org/schema/context https://www.springframework.org/schema/context/spring-context.xsd
+                           http://www.springframework.org/schema/mvc https://www.springframework.org/schema/mvc/spring-mvc.xsd
+                           http://www.springframework.org/schema/tx https://www.springframework.org/schema/tx/spring-tx.xsd">
+
+    <mvc:annotation-driven/>
+    <!-- 정적 자원은 no-cache: 브라우저가 보관하되 매번 변경 여부를 물어본다(바뀌지 않았으면 304).
+         배포 후에도 예전 JS·CSS 가 남아 화면이 어긋나지 않게 한다 -->
+    <mvc:resources mapping="/resources/**" location="/resources/">
+        <mvc:cache-control no-cache="true"/>
+    </mvc:resources>
+    <mvc:resources mapping="/manifest.json" location="/">
+        <mvc:cache-control no-cache="true"/>
+    </mvc:resources>
+
+    <context:component-scan base-package="workout"/>
+
+    <!-- 플레이스홀더 설정은 컨텍스트마다 따로 필요하다. 루트(context-datasource.xml)의 것은 이 컨텍스트의 @Value 에 적용되지 않는다 -->
+    <context:property-placeholder location="classpath:/egovProps/globals.properties"/>
+
+    <!-- @Transactional 활성화. tx:annotation-driven 은 자기 컨텍스트의 빈에만 적용되는데 컴포넌트 스캔은 이 컨텍스트에 있다.
+         로직을 가진 ApiController 메서드에 @Transactional 을 붙인다. transactionManager 는 루트 컨텍스트(context-datasource.xml) 빈 -->
+    <tx:annotation-driven transaction-manager="transactionManager"/>
+
+    <!-- 0순위: 빈 이름으로 뷰 찾기 (jsonView) -->
+    <bean class="org.springframework.web.servlet.view.BeanNameViewResolver">
+        <property name="order" value="0"/>
+    </bean>
+    <bean id="jsonView" class="org.springframework.web.servlet.view.json.MappingJackson2JsonView">
+        <property name="contentType" value="application/json;charset=UTF-8"/>
+    </bean>
+
+    <!-- 1순위: JSP. 컨트롤러는 "dashboard/dashboardMain" 처럼 /WEB-INF/jsp/workout/ 이하 경로를 반환한다.
+         레이아웃(메뉴+본문)은 Tiles 대신 /WEB-INF/tags/layout.tag 로 각 JSP가 자기 본문을 감싼다. -->
+    <bean id="viewResolver" class="org.springframework.web.servlet.view.InternalResourceViewResolver">
+        <property name="prefix" value="/WEB-INF/jsp/workout/"/>
+        <property name="suffix" value=".jsp"/>
+        <property name="order" value="1"/>
+    </bean>
+
+    <bean id="messageSource" class="org.springframework.context.support.ReloadableResourceBundleMessageSource">
+        <property name="basenames">
+            <list><value>classpath:/message/message-common</value></list>
+        </property>
+        <property name="defaultEncoding" value="UTF-8"/>
+        <property name="cacheSeconds" value="60"/>
+    </bean>
+
+    <mvc:interceptors>
+        <!-- POST 는 Ajax(JSON) 만: CSRF 차단 -->
+        <mvc:interceptor>
+            <mvc:mapping path="/auth/**"/>
+            <mvc:mapping path="/workout/**"/>
+            <bean class="workout.interceptor.ApiRequestInterceptor"/>
+        </mvc:interceptor>
+        <!-- 로그인 확인: /workout/** 는 세션에 userId 가 있어야 접근 가능 -->
+        <mvc:interceptor>
+            <mvc:mapping path="/workout/**"/>
+            <bean class="workout.interceptor.LoginPageInterceptor"/>
+        </mvc:interceptor>
+    </mvc:interceptors>
+</beans>

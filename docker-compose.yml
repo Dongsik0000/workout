@@ -1,0 +1,24 @@
+# workout 배포 구성 (서버: /srv/devgear/workout)
+#
+#   docker compose up -d --build     기동
+#   docker compose logs -f app       로그
+#   docker compose down              중지
+#
+# 호스트 PostgreSQL(127.0.0.1:5432) 에 붙기 위해 host 네트워크를 쓴다. Tomcat 은 127.0.0.1:8082 에만 열리고
+# 외부 요청은 nginx /p4/ 가 받는다 (deploy/nginx-workout.conf).
+# 비밀값은 /etc/workout/app.env (deploy/app.env.example 참고).
+
+name: workout
+
+services:
+  app:
+    build:
+      context: .
+    image: workout:local
+    container_name: workout
+    network_mode: host
+    env_file:
+      - /etc/workout/app.env
+    environment:
+      CATALINA_OPTS: -Dtomcat.address=127.0.0.1
+    restart: unless-stopped

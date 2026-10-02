@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- workout 패키지(매퍼 SQL 포함). 로컬 DEBUG, 운영 이미지는 WORKOUT_LOG_LEVEL=INFO (SQL 파라미터에 기록 내용이 남지 않게) -->
+    <logger name="workout" level="${WORKOUT_LOG_LEVEL:-DEBUG}"/>
+    <logger name="org.springframework" level="INFO"/>
+    <logger name="com.zaxxer.hikari" level="INFO"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

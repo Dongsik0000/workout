@@ -1,0 +1,17 @@
+<%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<%@ include file="/common/taglib.jsp"%>
+<t:layout title="친구" page="friend">
+    <jsp:attribute name="script"><link rel="stylesheet" href="<c:url value='/resources/css/friend.css'/>"><script defer src="<c:url value='/resources/js/app/friend/friend.js'/>"></script></jsp:attribute>
+    <jsp:body>
+        <div class="page-head"><div><p class="section-kicker">RUN TOGETHER</p><h1>친구</h1><p class="page-sub">함께하면, 한 걸음 더 나아갈 수 있으니까.</p></div></div>
+        <div class="friend-layout">
+            <section class="panel friend-search"><svg class="empty-art" viewBox="0 0 144 110" fill="none" aria-hidden="true"><ellipse cx="72" cy="91" rx="48" ry="7" fill="#ecf0f7"/><circle cx="71" cy="54" r="48" fill="#f4f7fc"/><circle cx="56" cy="43" r="12" fill="white" stroke="#b8cbed" stroke-width="1.5"/><path d="M33 80v-8a23 23 0 0 1 46 0v8" fill="white" stroke="#b8cbed" stroke-width="1.5"/><circle cx="95" cy="44" r="10" fill="#ebf5f1" stroke="#aacfc2" stroke-width="1.5"/><path d="M87 61a20 20 0 0 1 27 19" stroke="#aacfc2" stroke-width="1.5" fill="#ebf5f1"/></svg><p class="section-kicker">FIND A FRIEND</p><h2>친구 찾기</h2><p class="muted">아이디로 친구를 찾아 요청을 보낼 수 있어요.</p><form id="friendSearchForm" class="friend-search-form"><label class="field"><span>아이디</span><input name="username" autocomplete="off" maxlength="50" placeholder="친구의 아이디" required></label><button class="button primary" type="submit">검색</button></form><div id="searchResult" class="search-result"><p class="muted">아이디를 입력해 친구를 찾아보세요.</p></div><template id="searchItemTemplate"><div class="search-item"><span class="friend-name"></span><button class="button primary" type="button" data-action="request">친구 요청</button><span class="search-state" hidden></span></div></template></section>
+            <div class="friend-lists">
+                <section class="panel friend-panel"><div class="row-between"><h2>받은 요청</h2><span id="receivedCount" class="pill">0</span></div><ul id="receivedList" class="list-clean"></ul><template id="receivedItemTemplate"><li data-id=""><span class="friend-name"></span><div class="friend-actions"><button class="button primary" type="button" data-action="accept">수락</button><button class="button" type="button" data-action="decline">거절</button></div></li></template><p class="friend-empty">받은 요청이 없어요.</p></section>
+                <section class="panel friend-panel"><h2>보낸 요청</h2><ul id="sentList" class="list-clean"></ul><template id="sentItemTemplate"><li data-id=""><span class="friend-name"></span><button class="button" type="button" data-action="cancel">취소</button></li></template><p class="friend-empty">보낸 요청이 없어요.</p></section>
+                <section class="panel friend-panel"><h2>내 친구</h2><ul id="friendList" class="list-clean"></ul><template id="friendItemTemplate"><li data-id="" data-user-id=""><span class="friend-name"></span><div class="friend-actions"><a class="button" data-action="calendar" href="<c:url value='/workout/record'/>">기록 보기</a><button class="button danger" type="button" data-action="delete">삭제</button></div></li></template><div class="friend-empty friend-empty-main"><span class="friend-ghosts" aria-hidden="true">＋</span><h3>함께 달릴 친구를 초대해 보세요</h3><p>서로의 기록을 살펴보고 꾸준함을 응원해요.</p></div></section>
+            </div>
+        </div>
+        <p class="preview-note"><span>미리보기</span>현재 화면을 살펴볼 수 있어요. 기록 조회와 저장 기능은 준비 중입니다.</p>
+    </jsp:body>
+</t:layout>

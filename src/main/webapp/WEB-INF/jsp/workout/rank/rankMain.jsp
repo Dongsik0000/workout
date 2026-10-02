@@ -1,0 +1,17 @@
+<%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<%@ include file="/common/taglib.jsp"%>
+<t:layout title="순위" page="rank">
+    <jsp:attribute name="script"><link rel="stylesheet" href="<c:url value='/resources/css/rank.css'/>"><script defer src="<c:url value='/resources/js/app/rank/rank.js'/>"></script></jsp:attribute>
+    <jsp:body>
+        <div class="page-head"><div><p class="section-kicker">BETTER TOGETHER</p><h1>친구 순위</h1><p class="page-sub">빠르기보다 꾸준하게. 함께 쌓아가는 기록.</p></div></div>
+        <div class="rank-toolbar"><div class="segmented" role="group" aria-label="순위 기간"><button type="button" data-period="WEEK" aria-pressed="true">이번 주</button><button type="button" data-period="MONTH" aria-pressed="false">이번 달</button></div><p id="periodLabel" class="muted"></p></div>
+        <div class="rank-layout">
+            <section class="panel rank-panel"><div class="rank-panel-head"><span class="rank-icon"><svg class="icon" aria-hidden="true"><use href="#i-run"></use></svg></span><div><p class="section-kicker">DISTANCE</p><h2>러닝 거리</h2></div></div><ol id="distanceRank" class="rank-list list-clean"></ol><div class="rank-placeholder"><svg class="empty-art" viewBox="0 0 144 110" fill="none" aria-hidden="true"><ellipse cx="72" cy="91" rx="48" ry="7" fill="#ecf0f7"/><circle cx="71" cy="54" r="48" fill="#f4f7fc"/><rect x="34" y="59" width="18" height="26" rx="4" fill="#dfe8fb"/><rect x="62" y="39" width="18" height="46" rx="4" fill="#b6caf5"/><rect x="90" y="49" width="18" height="36" rx="4" fill="#d8e9e3"/><path d="m69 14 3 6 7 1-5 5 1 7-6-4-6 4 1-7-5-5 7-1Z" fill="#eecf7b"/></svg><h3>첫 기록을 기다리고 있어요</h3><p>운동 기록이 쌓이면 순위를 볼 수 있어요.</p></div></section>
+            <section class="panel rank-panel"><div class="rank-panel-head"><span class="rank-icon"><svg class="icon" aria-hidden="true"><use href="#i-today"></use></svg></span><div><p class="section-kicker">ACTIVE DAYS</p><h2>운동한 날</h2></div></div><ol id="daysRank" class="rank-list list-clean"></ol><div class="rank-placeholder"><svg class="empty-art" viewBox="0 0 144 110" fill="none" aria-hidden="true"><ellipse cx="72" cy="91" rx="48" ry="7" fill="#ecf0f7"/><circle cx="71" cy="54" r="48" fill="#f4f7fc"/><rect x="34" y="59" width="18" height="26" rx="4" fill="#dfe8fb"/><rect x="62" y="39" width="18" height="46" rx="4" fill="#b6caf5"/><rect x="90" y="49" width="18" height="36" rx="4" fill="#d8e9e3"/><path d="m69 14 3 6 7 1-5 5 1 7-6-4-6 4 1-7-5-5 7-1Z" fill="#eecf7b"/></svg><h3>첫 기록을 기다리고 있어요</h3><p>운동 기록이 쌓이면 순위를 볼 수 있어요.</p></div></section>
+        </div>
+        <a class="rank-invite" href="<c:url value='/workout/friend'/>"><span class="invite-icon"><svg class="icon" aria-hidden="true"><use href="#i-people"></use></svg></span><span><strong>친구와 함께, 더 꾸준하게</strong><small>함께 운동할 친구를 찾아보세요.</small></span><span aria-hidden="true">↗</span></a>
+        <template id="rankItemTemplate"><li data-me="false"><span class="rank-no"></span><span class="rank-name"></span><strong class="rank-value"></strong></li></template>
+        <div id="rankEmpty" class="panel rank-empty" hidden><svg class="icon" aria-hidden="true"><use href="#i-people"></use></svg><div><h2>함께 달릴 친구를 찾아보세요</h2><p class="muted">친구를 추가하면 이번 주와 이번 달 순위를 볼 수 있어요.</p></div><a class="button primary" href="<c:url value='/workout/friend'/>">친구 찾기</a></div>
+        <p class="preview-note"><span>미리보기</span>현재 화면을 살펴볼 수 있어요. 기록 조회와 저장 기능은 준비 중입니다.</p>
+    </jsp:body>
+</t:layout>

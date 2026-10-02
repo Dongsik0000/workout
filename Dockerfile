@@ -1,0 +1,50 @@
+# workout WAS — Spring 6 / MyBatis / Java 17 / Tomcat 10.1
+#
+#   docker compose up -d --build
+#
+# 빌드 단계에서 Maven 으로 war 를 만들고 실행 단계의 Tomcat 에 p4.war 로 넣는다.
+
+# ── 빌드 ──────────────────────────────────────────────
+FROM maven:3.9-eclipse-temurin-17 AS build
+WORKDIR /build
+
+# 의존성 먼저 받아 레이어로 굳힌다 — 소스만 바뀌면 이 단계는 캐시된다.
+COPY pom.xml .
+RUN mvn -B -q dependency:go-offline
+
+COPY src ./src
+RUN mvn -B clean package -DskipTests
+
+# ── 실행 ──────────────────────────────────────────────
+FROM tomcat:10.1-jdk17-temurin
+
+# 포트 8082, 서버에서는 loopback 에만 바인딩 (docker-compose 의 CATALINA_OPTS 로 지정)
+# 종료 포트(8005)는 끈다 — host 네트워크라 같은 서버의 다른 Tomcat(p1)과 겹치고, 컨테이너는 신호로 종료한다
+ENV CATALINA_OPTS="-Dtomcat.address=0.0.0.0"
+RUN sed -i -e 's/<Connector port="8080"/<Connector address="${tomcat.address}" port="8082"/' \
+           -e 's/<Server port="8005"/<Server port="-1"/' /usr/local/tomcat/conf/server.xml \
+    && grep -q '<Server port="-1"' /usr/local/tomcat/conf/server.xml \
+    && grep -q 'port="8082"' /usr/local/tomcat/conf/server.xml
+
+# 기본 웹앱(manager, examples) 제거 — 운영에 불필요하고 공격면만 넓힌다
+RUN rm -rf /usr/local/tomcat/webapps/*
+
+# SameSite 쿠키 설정을 /p4 컨텍스트에 적용 (nginx 가 /p4/ 로 프록시하므로 ROOT 가 아닌 p4 로 배포)
+COPY src/main/webapp/META-INF/context.xml /usr/local/tomcat/conf/Catalina/localhost/p4.xml
+COPY --from=build /build/target/workout.war /usr/local/tomcat/webapps/p4.war
+
+# 날짜 계산이 한국 시간 기준이 되도록 타임존 고정
+ENV TZ=Asia/Seoul \
+    JAVA_OPTS="-Xms128m -Xmx384m -Duser.timezone=Asia/Seoul -Djava.security.egd=file:/dev/./urandom"
+
+# 운영 기본값: 로그 INFO, 가입 코드 없음(= 가입 불가). /etc/workout/app.env 의 값이 이보다 우선한다
+ENV WORKOUT_LOG_LEVEL=INFO \
+    WORKOUT_SIGNUP_CODE=""
+
+EXPOSE 8082
+
+# 세션을 만들지 않는 정적 파일로 확인한다 (로그인 화면은 호출마다 세션이 생겨 쌓인다)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+    CMD curl -fsS http://localhost:8082/p4/manifest.json > /dev/null || exit 1
+
+CMD ["catalina.sh", "run"]
